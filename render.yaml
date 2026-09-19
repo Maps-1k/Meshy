@@ -1,0 +1,52 @@
+# Render Blueprint: New + -> Blueprint -> выберите репозиторий с этим проектом.
+# Всё хранится в Postgres, на диск сервиса ничего не пишется (диск Render временный),
+# состояния в памяти процесса нет (сервис может уснуть/перезапуститься в любой момент).
+databases:
+  - name: calendarik-db
+    databaseName: calendarik
+    user: calendarik
+    plan: free            # у free-Postgres срок жизни 30 дней. Для постоянной работы поставьте basic-256mb
+
+services:
+  - type: web
+    name: calendarik
+    runtime: node
+    plan: free            # free засыпает через 15 мин без трафика; для «всегда онлайн» поставьте starter
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: calendarik-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CRON_SECRET          # ключ для внешнего «будильника» /api/tick (см. README)
+        generateValue: true
+      - key: VAPID_PUBLIC_KEY     # npm run vapid, вставьте в Dashboard
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:bob11bull@gmail.com
+
+  # Необязательно: платный Render Cron Job (от $1/мес), если не хотите внешний будильник.
+  # Раскомментируйте и задайте те же VAPID_* в Dashboard.
+  # - type: cron
+  #   name: calendarik-tick
+  #   runtime: node
+  #   schedule: "*/5 * * * *"
+  #   buildCommand: npm ci --omit=dev
+  #   startCommand: node src/cron.js
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       fromDatabase: { name: calendarik-db, property: connectionString }
+  #     - key: VAPID_PUBLIC_KEY
+  #       sync: false
+  #     - key: VAPID_PRIVATE_KEY
+  #       sync: false
+  #     - key: VAPID_SUBJECT
+  #       value: mailto:you@example.com
